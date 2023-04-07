@@ -28,17 +28,14 @@ const item3 = new Item({
  
 const defaultItems = [item1, item2, item3];
 
-// comment out so doesn't repeat posts 
-//Item.insertMany(defaultItems).then(function () {
-//    console.log("Successfully saved defult items to DB");
-//  }).catch(function (err) {
-//    console.log(err);
-//  });
+const listSchema = {
+  name: String, 
+  items: [itemsSchema]
+};
+
+const List = mongoose.model("List", listSchema); 
  
- 
- 
-//const workItems = [];
- 
+
 app.get("/", function(req, res) {
     Item.find({})
     .then(foundItem => {
@@ -60,30 +57,72 @@ app.get("/", function(req, res) {
 app.post("/", function(req, res){
  
   const itemName = req.body.newItem;
+  const listName = req.body.list; 
+
   const item = new Item({
     name: itemName
   });
   
-  item.save(); 
-  res.redirect("/");
+  if (listName === "Today"){
+    item.save();
+    res.redirect("/");
+  } else {
+    List.findOne({name: listName}).then(function(foundList){
+      foundList.items.push(item);
+      foundList.save();
+      res.redirect("/" + listName);  
+   }).catch((err) => {
+      console.log(err);
+   })
+  }
 });
 
 app.post("/delete", function(req, res){
   const checkedItemId = req.body.checkbox.trim(); 
-  Item.findByIdAndDelete(checkedItemId)
-  .then(() => {
+  const listName = req.body.listName; 
+
+  if (listName === "Today") {
+    Item.findByIdAndDelete(checkedItemId)
+    .then(() => {
         console.log("Succesfully deleted checked item from the database");
         res.redirect("/");
     })
     .catch((err) => {
         console.log(err);
-    })
+    }); 
+   } else {
+     List.findOneAndUpdate({name: listName}, {$pull: {items: {_id: checkedItemId}}})
+      .then(function (foundList){
+        res.redirect("/" + listName);
+      });
+   }
 });
- 
-app.get("/work", function(req,res){
-  res.render("list", {listTitle: "Work List", newListItems: workItems});
+
+app.get("/:customListName", function(req, res){
+  const customListName = req.params.customListName;
+  
+  List.findOne({name: customListName}).then(function(foundList){
+     
+       if(!foundList){
+          const list = new List({
+          name: customListName,
+          items: defaultItems
+        });
+        
+        list.save();
+        console.log("saved");
+        res.redirect("/"+customListName); 
+        } else {
+           res.render("list", {listTitle: foundList.name, 
+                               newListItems: foundList.items
+                              });
+               }
+   }).catch((err) => {
+       console.log(err);  
+   }) 
+     
 });
- 
+
 app.get("/about", function(req, res){
   res.render("about");
 });
